@@ -1230,6 +1230,30 @@ ngx_rtmp_notify_update_handle(ngx_rtmp_session_t *s,
 }
 
 
+static ngx_int_t
+ngx_rtmp_notify_record_done_handle(ngx_rtmp_session_t *s,
+        void *arg, ngx_chain_t *in)
+{
+    ngx_rtmp_record_done_t     *v = arg;
+    ngx_int_t                   rc;
+
+    rc = ngx_rtmp_notify_parse_http_retcode(s, in);
+
+    if (rc != NGX_OK)
+    {
+        // remove file if we failed to notify
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
+                      "notify: record_done failed, removing file '%V'",
+                      v->path);
+        ngx_delete_file(v->path);
+
+        // Do not stop RTMP session, our listener can return online
+    }
+
+    return NGX_OK;
+}
+
+
 static void
 ngx_rtmp_notify_update(ngx_event_t *e)
 {
@@ -1544,6 +1568,7 @@ ngx_rtmp_notify_record_done(ngx_rtmp_session_t *s, ngx_rtmp_record_done_t *v)
 
     ci.url    = nacf->url[NGX_RTMP_NOTIFY_RECORD_DONE];
     ci.create = ngx_rtmp_notify_record_done_create;
+    ci.handle = ngx_rtmp_notify_record_done_handle;
     ci.arg    = v;
 
     ngx_rtmp_netcall_create(s, &ci);
