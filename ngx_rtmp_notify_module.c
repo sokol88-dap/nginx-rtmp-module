@@ -1244,8 +1244,8 @@ ngx_rtmp_notify_record_done_handle(ngx_rtmp_session_t *s,
         // remove file if we failed to notify
         ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
                       "notify: record_done failed, removing file '%V'",
-                      v->path);
-        ngx_delete_file(v->path);
+                      &v->path);
+        ngx_delete_file(&v->path);
 
         // Do not stop RTMP session, our listener can return online
     }
