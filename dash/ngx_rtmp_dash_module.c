@@ -1180,7 +1180,8 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_ERROR;
     }
 
-    ftype = (in->buf->pos[0] & 0xf0) >> 4;
+	 // H.265 used 4th bit for external usage
+    ftype = (in->buf->pos[0] & 0x70) >> 4;
 
     /* skip AVC config */
 

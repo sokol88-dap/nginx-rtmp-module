@@ -41,8 +41,12 @@ enum {
     NGX_RTMP_VIDEO_ON2_VP6          = 4,
     NGX_RTMP_VIDEO_ON2_VP6_ALPHA    = 5,
     NGX_RTMP_VIDEO_SCREEN2          = 6,
-    NGX_RTMP_VIDEO_H264             = 7
+    NGX_RTMP_VIDEO_H264             = 7,
+    NGX_RTMP_VIDEO_H265             = 12
 };
+
+
+
 
 
 u_char * ngx_rtmp_get_audio_codec_name(ngx_uint_t id);

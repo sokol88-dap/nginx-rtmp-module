@@ -165,6 +165,12 @@ typedef struct {
 #define NGX_RTMP_MAX_CHUNK_HEADER       18
 
 
+// add by adwpc for hevc support
+#define NGX_RTMP_VIDEOTAG_CODECID_AVC   7
+#define NGX_RTMP_VIDEOTAG_CODECID_HEVC  12
+
+
+
 typedef struct {
     uint32_t                csid;       /* chunk stream id */
     uint32_t                timestamp;  /* timestamp (delta) */
@@ -604,11 +610,25 @@ ngx_int_t ngx_rtmp_send_sample_access(ngx_rtmp_session_t *s);
 #define NGX_RTMP_VIDEO_INTER_FRAME          2
 #define NGX_RTMP_VIDEO_DISPOSABLE_FRAME     3
 
+/*
+ExVideoTag Header Description Below 
+note:ExVideoTagHeader header is present IFIsExHeader flag is set
+*/
+enum {
+	PacketTypeSequenceStart 			= 0,
+	PacketTypeCodedFrames   			= 1,
+	PacketTypeSequenceEnd 				= 2,
+	PacketTypeCodedFramesX  			= 3,
+	PacketTypeMetadata					= 4,
+	PacketTypeMPEG2TSSequenceStart	= 6
+};
+
+
 
 static ngx_inline ngx_int_t
 ngx_rtmp_get_video_frame_type(ngx_chain_t *in)
 {
-    return (in->buf->pos[0] & 0xf0) >> 4;
+    return (in->buf->pos[0] & 0x70) >> 4;
 }
 
 
@@ -617,6 +637,15 @@ ngx_rtmp_is_codec_header(ngx_chain_t *in)
 {
     return in->buf->pos + 1 < in->buf->last && in->buf->pos[1] == 0;
 }
+
+static ngx_inline ngx_int_t
+ngx_rtmp_is_hevc_codec_header(ngx_chain_t *in)
+{
+	 //in->buf->pos
+    return in->buf->pos + 1 < in->buf->last && 
+    ( PacketTypeSequenceStart == (in->buf->pos[0]&0b1111) || PacketTypeSequenceEnd ==(in->buf->pos[0]&0b1111) );
+}
+
 
 
 extern ngx_rtmp_bandwidth_t                 ngx_rtmp_bw_out;

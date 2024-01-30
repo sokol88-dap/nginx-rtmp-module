@@ -295,6 +295,13 @@ ngx_rtmp_cmd_connect(ngx_rtmp_session_t *s, ngx_rtmp_connect_t *v)
 
 #undef NGX_RTMP_SET_STRPAR
 
+    // KONST TEST 
+    p = ngx_strlchr(s->app.data, s->app.data + s->app.len, '?');
+    if (p) {
+        s->app.len = (p - s->app.data);
+    }
+    // -------------------
+
     s->acodecs = (uint32_t) v->acodecs;
     s->vcodecs = (uint32_t) v->vcodecs;
 
