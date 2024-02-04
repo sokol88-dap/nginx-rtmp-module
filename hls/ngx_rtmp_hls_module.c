@@ -1976,7 +1976,7 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     ngx_int_t                       aud_sent, sps_pps_sent, boundary;
     static u_char                   buffer[NGX_RTMP_HLS_BUFSIZE];
     uint16_t                        src_nal_type_hevc, nal_type_hevc;
-    uint32_t                        src_start_code_hevc;
+    //uint32_t                        src_start_code_hevc;
 
     hacf = ngx_rtmp_get_module_app_conf(s, ngx_rtmp_hls_module);
 
