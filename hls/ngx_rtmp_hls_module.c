@@ -1976,6 +1976,7 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     ngx_int_t                       aud_sent, sps_pps_sent, boundary;
     static u_char                   buffer[NGX_RTMP_HLS_BUFSIZE];
     uint16_t                        src_nal_type_hevc, nal_type_hevc;
+    uint32_t                        src_start_code_hevc;
 
     hacf = ngx_rtmp_get_module_app_conf(s, ngx_rtmp_hls_module);
 
@@ -2005,39 +2006,64 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
 
     ftype = (fmt & 0x70) >> 4;
 
-    /* H264 HDR/PICT */
 
-    	 ngx_log_debug(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+    ngx_rtmp_hex_dump(s->connection->log, "konst Frame dump live 1", in->buf->start, in->buf->end);
+
+    /* H264 HDR/PICT */
+    //codec_ctx->avc_nal_bytes = 4;
+
+    ngx_log_debug(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
 						 "hls: codec_ctx->video_codec_id %d avc_nal_bytes:%d",codec_ctx->video_codec_id,codec_ctx->avc_nal_bytes);
+
+
+	 ngx_rtmp_hex_dump(s->connection->log, "konst hls Frame dump live 1", in->buf->start, in->buf->end);
+
+
+	 ngx_rtmp_hex_dump(s->connection->log, "konst hls Frame dump live 2", p, p+10);
+
 
 	 /* H265 */
 	 if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H265)
 	 {
     	 ngx_log_debug(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
 						 "hls: change position forH265");
-	 
-		 in->buf->pos+=5;
-		 p = in->buf->pos;
+
+   	 ngx_rtmp_hls_copy(s, &htype, &p, 4, &in);
+       ngx_rtmp_hex_dump(s->connection->log, "konst hls Frame dump live 3", p, p+4);	 
+       ngx_rtmp_hex_dump(s->connection->log, "konst hls Frame dump live 4", in->buf->pos, in->buf->pos+4);	 
+		 //in->buf->pos+=4;
+		 //p = in->buf->pos;
 //		 in->buf->pos+5
 	 }
 	    
 
-
+	 if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264)
     if (ngx_rtmp_hls_copy(s, &htype, &p, 1, &in) != NGX_OK) {
         return NGX_ERROR;
     }
 
-    /* proceed only with PICT */
+	 ngx_log_debug3(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+					 "hls: htype:%ui ftype:%ui p_type:%ui",htype,ftype,fmt&0b1111);
 
+    /* proceed only with PICT */
+	 if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264)
     if (htype != 1) {
         return NGX_OK;
     }
+	 if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H265)
+    if ((fmt&0b1111) == PacketTypeSequenceStart || (fmt&0b1111) == PacketTypeSequenceEnd) {
+        return NGX_OK;
+    }
+    
 
     /* 3 bytes: decoder delay */
-
+	 if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264)
     if (ngx_rtmp_hls_copy(s, &cts, &p, 3, &in) != NGX_OK) {
+    
         return NGX_ERROR;
     }
+
+    
 
     cts = ((cts & 0x00FF0000) >> 16) | ((cts & 0x000000FF) << 16) |
           (cts & 0x0000FF00);
@@ -2054,15 +2080,32 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     sps_pps_sent = 0;
 
     while (in) {
-        if (ngx_rtmp_hls_copy(s, &rlen, &p, nal_bytes, &in) != NGX_OK) {
-            return NGX_OK;
-        }
 
-        len = 0;
-        ngx_rtmp_rmemcpy(&len, &rlen, nal_bytes);
+        ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+                       "hls: nal_bytes=%ui",nal_bytes);
 
-        if (len == 0) {
-            continue;
+
+		  //ngx_rtmp_session_t *s, void *dst, u_char **src, size_t n,
+		  //		ngx_chain_t **in
+
+    	  //if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264)
+    	  {
+	        if (ngx_rtmp_hls_copy(s, &rlen, &p, nal_bytes, &in) != NGX_OK) {
+	            return NGX_OK;
+	        }
+
+	        ngx_log_debug2(NGX_LOG_DEBUG_RTMP, s->connection->log, 0, 
+	                       "hls: nal_bytes=%ui len:%xd",nal_bytes,len);
+
+	        len = 0;
+	        ngx_rtmp_rmemcpy(&len, &rlen, nal_bytes);
+
+
+	        if (len == 0) {
+				  ngx_log_debug2(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+											 "hls: nal_bytes=%ui len:%xd",nal_bytes,len);
+	            continue;
+	        }
         }
 
         if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264) {
@@ -2074,7 +2117,7 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         nal_type = src_nal_type & 0x1f;
 
         ngx_log_debug2(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
-                       "hls: h264 NAL type=%ui, len=%uD",
+                       "hls: h264 NAL type=%ui, len=%xd",
                        (ngx_uint_t) nal_type, len);
 
         if (nal_type >= 7 && nal_type <= 9) {
@@ -2153,7 +2196,20 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         }
 
         if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H265) {
-            // H265 NALU Header is 2 byte
+
+				//len = in->buf->last - in->buf->pos;
+
+				ngx_rtmp_hex_dump(s->connection->log, "konst hls Frame dump live 5", in->buf->pos, in->buf->pos+10);
+
+				/*
+				if (ngx_rtmp_hls_copy(s, &src_start_code_hevc, &p, 4, &in) != NGX_OK) {
+							 return NGX_OK;
+				}
+						
+				  ngx_log_debug(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+									  "ngx_rtmp_hls_video: h265 START CODE 4 bytes %xd len=%uD",src_start_code_hevc,len);
+				*/
+		      // H265 NALU Header is 2 byte
             if (ngx_rtmp_hls_copy(s, &src_nal_type_hevc, &p, 2, &in) != NGX_OK) {
                 return NGX_OK;
             }
@@ -2172,6 +2228,8 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
                     return NGX_ERROR;
                 }
                 continue;
+                //KONST ????
+                //return NGX_OK;
             }
 
             if (!aud_sent) {
