@@ -6,6 +6,7 @@
 #include <ngx_rtmp_codec_module.h>
 #include "ngx_rtmp_live_module.h"
 #include "ngx_rtmp_mp4.h"
+#include <string.h>
 
 
 static ngx_rtmp_publish_pt              next_publish;
@@ -230,10 +231,12 @@ ngx_rtmp_dash_write_playlist(ngx_rtmp_session_t *s)
     static u_char              buffer[NGX_RTMP_DASH_BUFSIZE];
     static u_char              start_time[sizeof("1970-09-28T12:00:00Z")];
     static u_char              pub_time[sizeof("1970-09-28T12:00:00Z")];
+    u_char                     codec_string[50];
 
     dacf = ngx_rtmp_get_module_app_conf(s, ngx_rtmp_dash_module);
     ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_dash_module);
     codec_ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_codec_module);
+    memset(codec_string, 0, sizeof(codec_string));
 
     if (dacf == NULL || ctx == NULL || codec_ctx == NULL) {
         return NGX_ERROR;
@@ -277,9 +280,9 @@ ngx_rtmp_dash_write_playlist(ngx_rtmp_session_t *s)
     "        maxHeight=\"%ui\"\n"                                              \
     "        maxFrameRate=\"%ui\">\n"                                          \
     "      <Representation\n"                                                  \
-    "          id=\"%V_H264\"\n"                                               \
+    "          id=\"%V_%s\"\n"                                                 \
     "          mimeType=\"video/mp4\"\n"                                       \
-    "          codecs=\"avc1.%02uxi%02uxi%02uxi\"\n"                           \
+    "          codecs=\"%s\"\n"                                                \
     "          width=\"%ui\"\n"                                                \
     "          height=\"%ui\"\n"                                               \
     "          frameRate=\"%ui\"\n"                                            \
@@ -372,14 +375,23 @@ ngx_rtmp_dash_write_playlist(ngx_rtmp_session_t *s)
     sep = (dacf->nested ? "" : "-");
 
     if (ctx->has_video) {
+        if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264) {
+            ngx_sprintf(codec_string, "avc1.%02uxi%02uxi%02uxi",
+                        codec_ctx->avc_profile, codec_ctx->avc_compat, codec_ctx->avc_level);
+        } else {
+            ngx_sprintf(codec_string, "hvc1.%d.%d.L%d.0",
+                        codec_ctx->avc_profile,
+                        (ngx_uint_t)((codec_ctx->avc_compat >> 28) & 0xF), // We need investigate this
+                        codec_ctx->avc_level);
+        }
+
         p = ngx_slprintf(buffer, last, NGX_RTMP_DASH_MANIFEST_VIDEO,
                          codec_ctx->width,
                          codec_ctx->height,
                          codec_ctx->frame_rate,
                          &ctx->name,
-                         codec_ctx->avc_profile,
-                         codec_ctx->avc_compat,
-                         codec_ctx->avc_level,
+                         (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264) ? "H264" : "H265",
+                         codec_string,
                          codec_ctx->width,
                          codec_ctx->height,
                          codec_ctx->frame_rate,
@@ -1155,6 +1167,7 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
 {
     u_char                    *p;
     uint8_t                    ftype, htype;
+    uint8_t                    is_ex_header = 0;
     uint32_t                   delay;
     ngx_rtmp_dash_ctx_t       *ctx;
     ngx_rtmp_codec_ctx_t      *codec_ctx;
@@ -1170,9 +1183,9 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_OK;
     }
 
-    /* Only H264 is supported */
+    /* Only AVC/HEVC are supported */
 
-    if (codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264) {
+    if (codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264 && codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H265) {
         return NGX_OK;
     }
 
@@ -1180,26 +1193,55 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_ERROR;
     }
 
-	 // H.265 used 4th bit for external usage
-    ftype = (in->buf->pos[0] & 0x70) >> 4;
+	// H.265 used 4th bit for external usage
+    if (in->buf->pos[0] & 0x80) {
+        is_ex_header = 1;
+    }
 
-    /* skip AVC config */
+    /* Recognize key frame*/
+    if ((in->buf->pos[0] >> 4) == 1 || (is_ex_header == 1 && ((in->buf->pos[0] & 0x70) >> 4) == 1)) {
+        ftype = 1;
+    }
 
-    htype = in->buf->pos[1];
-    if (htype != 1) {
-        return NGX_OK;
+    /* skip AVC/HEVC config */
+    if (is_ex_header == 1) {
+        htype = in->buf->pos[0] & 0x0F;
+        if (htype != 1 && htype != 3) {
+            return NGX_OK;
+        }
+    } else {
+        htype = in->buf->pos[1];
+        if (htype != 1) {
+            return NGX_OK;
+        }
     }
 
     p = (u_char *) &delay;
 
-    p[0] = in->buf->pos[4];
-    p[1] = in->buf->pos[3];
-    p[2] = in->buf->pos[2];
-    p[3] = 0;
+    if (is_ex_header == 1) {
+        /* HEVC */
+        if (htype == 1) {
+            p[0] = in->buf->pos[7];
+            p[1] = in->buf->pos[6];
+            p[2] = in->buf->pos[5];
+            p[3] = 0;
+        } else {
+            p[0] = 0;
+            p[1] = 0;
+            p[2] = 0;
+            p[3] = 0;
+        }
+    } else {
+        /* AVC */
+        p[0] = in->buf->pos[4];
+        p[1] = in->buf->pos[3];
+        p[2] = in->buf->pos[2];
+        p[3] = 0;
+    }
 
     ctx->has_video = 1;
 
-    /* skip RTMP & H264 headers */
+    /* skip RTMP & AVC/HEVC headers */
 
     in->buf->pos += 5;
 

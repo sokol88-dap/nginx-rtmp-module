@@ -706,7 +706,8 @@ ngx_rtmp_codec_parse_hevc_header(ngx_rtmp_session_t *s, ngx_chain_t *in)
     tmp = (ngx_uint_t)ngx_rtmp_bit_read_8(&br);
     ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0, "codec: hevc general_profile_space:general_tier_flag:general_profile_idc  = %xd", tmp);
 
-    ctx->avc_profile = (ngx_uint_t) ((tmp & 0x1f) >> 5);
+    // ctx->avc_profile = (ngx_uint_t) ((tmp & 0x1f) >> 5); // Why we need to shift 5 bits?
+    ctx->avc_profile = (ngx_uint_t) (tmp & 0x1f);
 
 
     ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0, "codec: hevc general_profile_idc\t = %xd", ctx->avc_profile);

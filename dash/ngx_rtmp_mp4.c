@@ -534,6 +534,50 @@ ngx_rtmp_mp4_write_avcc(ngx_rtmp_session_t *s, ngx_buf_t *b)
     return NGX_OK;
 }
 
+static ngx_int_t
+ngx_rtmp_mp4_write_hvcc(ngx_rtmp_session_t *s, ngx_buf_t *b)
+{
+    u_char                *pos, *p;
+    ngx_chain_t           *in;
+    ngx_rtmp_codec_ctx_t  *codec_ctx;
+
+    codec_ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_codec_module);
+
+    if (codec_ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    in = codec_ctx->avc_header;
+    if (in == NULL) {
+        return NGX_ERROR;
+    }
+
+    pos = ngx_rtmp_mp4_start_box(b, "hvcC");
+
+    /* assume config fits one chunk (highly probable) */
+
+    /*
+     * Skip:
+     * - flv fmt
+     * - H265 CONF/PICT (0x00)
+     * - 0
+     * - 0
+     * - 0
+     */
+
+    p = in->buf->pos + 5;
+
+    if (p < in->buf->last) {
+        ngx_rtmp_mp4_data(b, p, (size_t) (in->buf->last - p));
+    } else {
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, ngx_errno,
+                      "dash: invalid hvcc received");
+    }
+
+    ngx_rtmp_mp4_update_box_size(b, pos);
+
+    return NGX_OK;
+}
 
 static ngx_int_t
 ngx_rtmp_mp4_write_video(ngx_rtmp_session_t *s, ngx_buf_t *b)
@@ -543,7 +587,11 @@ ngx_rtmp_mp4_write_video(ngx_rtmp_session_t *s, ngx_buf_t *b)
 
     codec_ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_codec_module);
 
-    pos = ngx_rtmp_mp4_start_box(b, "avc1");
+    if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H265) {
+        pos = ngx_rtmp_mp4_start_box(b, "hvc1");
+    } else {
+        pos = ngx_rtmp_mp4_start_box(b, "avc1");
+    }
 
     /* reserved */
     ngx_rtmp_mp4_field_32(b, 0);
@@ -589,7 +637,11 @@ ngx_rtmp_mp4_write_video(ngx_rtmp_session_t *s, ngx_buf_t *b)
     ngx_rtmp_mp4_field_16(b, 0x18);
     ngx_rtmp_mp4_field_16(b, 0xffff);
 
-    ngx_rtmp_mp4_write_avcc(s, b);
+    if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H265) {
+        ngx_rtmp_mp4_write_hvcc(s, b);
+    } else {
+        ngx_rtmp_mp4_write_avcc(s, b);
+    }
 
     ngx_rtmp_mp4_update_box_size(b, pos);
 
