@@ -375,6 +375,7 @@ ngx_rtmp_dash_write_playlist(ngx_rtmp_session_t *s)
     sep = (dacf->nested ? "" : "-");
 
     if (ctx->has_video) {
+
         if (codec_ctx->video_codec_id == NGX_RTMP_VIDEO_H264) {
             ngx_sprintf(codec_string, "avc1.%02uxi%02uxi%02uxi",
                         codec_ctx->avc_profile, codec_ctx->avc_compat, codec_ctx->avc_level);
@@ -1177,15 +1178,17 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_dash_module);
     codec_ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_codec_module);
 
+    
     if (dacf == NULL || !dacf->dash || ctx == NULL || codec_ctx == NULL ||
         codec_ctx->avc_header == NULL || h->mlen < 5)
     {
         return NGX_OK;
     }
 
-    /* Only AVC/HEVC are supported */
+    /* Only HEVC are supported in DASH because we need to time to test H264 streams with DASH */
 
-    if (codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264 && codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H265) {
+    if (/*codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264 &&*/ 
+        codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H265) {
         return NGX_OK;
     }
 
@@ -1193,7 +1196,7 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_ERROR;
     }
 
-	// H.265 used 4th bit for external usage
+        // H.265 used 4th bit for external usage
     if (in->buf->pos[0] & 0x80) {
         is_ex_header = 1;
     }
@@ -1204,6 +1207,7 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     }
 
     /* skip AVC/HEVC config */
+
     if (is_ex_header == 1) {
         htype = in->buf->pos[0] & 0x0F;
         if (htype != 1 && htype != 3) {

@@ -1990,8 +1990,10 @@ ngx_rtmp_hls_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
         return NGX_OK;
     }
 
-    /* Only H264 and H265 is supported */
-    if (codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264 && codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H265) {
+    /* Only H264  is supported in the HLS */
+    if  ( codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H264 
+          /*&& codec_ctx->video_codec_id != NGX_RTMP_VIDEO_H265*/
+        ) {
         return NGX_OK;
     }
 
