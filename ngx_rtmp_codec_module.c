@@ -715,7 +715,7 @@ ngx_rtmp_codec_parse_hevc_header(ngx_rtmp_session_t *s, ngx_chain_t *in)
 
     //unsigned int(32) general_profile_compatibility_flags;
     ctx->avc_compat = (ngx_uint_t) ngx_rtmp_bit_read_32(&br);
-	 ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0, "codec: hevc ctx->avc_compat----  = %xd", ctx->avc_compat);
+	ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0, "codec: hevc ctx->avc_compat----  = %xd", ctx->avc_compat);
 
     
     //unsigned int(48) general_constraint_indicator_flags;

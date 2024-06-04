@@ -615,12 +615,12 @@ ExVideoTag Header Description Below
 note:ExVideoTagHeader header is present IFIsExHeader flag is set
 */
 enum {
-	PacketTypeSequenceStart 			= 0,
-	PacketTypeCodedFrames   			= 1,
-	PacketTypeSequenceEnd 				= 2,
-	PacketTypeCodedFramesX  			= 3,
-	PacketTypeMetadata					= 4,
-	PacketTypeMPEG2TSSequenceStart	= 6
+	PacketTypeSequenceStart 	= 0,
+	PacketTypeCodedFrames   	= 1,
+	PacketTypeSequenceEnd 		= 2,
+	PacketTypeCodedFramesX  	= 3,
+	PacketTypeMetadata		= 4,
+	PacketTypeMPEG2TSSequenceStart  = 5
 };
 
 

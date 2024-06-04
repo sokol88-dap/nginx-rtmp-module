@@ -380,9 +380,22 @@ ngx_rtmp_dash_write_playlist(ngx_rtmp_session_t *s)
             ngx_sprintf(codec_string, "avc1.%02uxi%02uxi%02uxi",
                         codec_ctx->avc_profile, codec_ctx->avc_compat, codec_ctx->avc_level);
         } else {
+            // It's look like we have to reverse the value of avc_compat
+            // to get the correct codec string
+            // This is a workaround, we need to investigate this more
+            // To check parameters of the codec, we can use MP4Box
+            // MP4Box -info init.m4v  2>&1 | grep RFC6381 | awk '{print $4}' | paste -sd , -
+            uint32_t value = codec_ctx->avc_compat;
+            uint32_t reversed_value = 0;
+            for (int i = 0; i < 32; i++) {
+                reversed_value <<= 1;
+                if (value & 1)
+                    reversed_value ^= 1;
+                value >>= 1;
+            }
             ngx_sprintf(codec_string, "hvc1.%d.%d.L%d.0",
                         codec_ctx->avc_profile,
-                        (ngx_uint_t)((codec_ctx->avc_compat >> 28) & 0xF), // We need investigate this
+                        reversed_value,
                         codec_ctx->avc_level);
         }
 
@@ -1229,6 +1242,7 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
             p[1] = in->buf->pos[6];
             p[2] = in->buf->pos[5];
             p[3] = 0;
+            in->buf->pos += 3;
         } else {
             p[0] = 0;
             p[1] = 0;
