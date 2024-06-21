@@ -87,6 +87,7 @@ typedef struct {
     ngx_str_t                           path;
     ngx_uint_t                          winfrags;
     ngx_msec_t                          cleanup;
+    ngx_uint_t                          fragment_scale_limit;
     ngx_path_t                         *slot;
 } ngx_rtmp_dash_app_conf_t;
 
@@ -133,6 +134,13 @@ static ngx_command_t ngx_rtmp_dash_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_RTMP_APP_CONF_OFFSET,
       offsetof(ngx_rtmp_dash_app_conf_t, nested),
+      NULL },
+
+    { ngx_string("dash_fragment_scale_limit"),
+      NGX_RTMP_MAIN_CONF|NGX_RTMP_SRV_CONF|NGX_RTMP_APP_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_RTMP_APP_CONF_OFFSET,
+      offsetof(ngx_rtmp_dash_app_conf_t, fragment_scale_limit),
       NULL },
 
     ngx_null_command
@@ -1024,8 +1032,9 @@ ngx_rtmp_dash_update_fragments(ngx_rtmp_session_t *s, ngx_int_t boundary,
         f->duration = timestamp - f->timestamp;
         hit = (f->duration >= dacf->fraglen);
 
-        /* keep fragment lengths within 2x factor for dash.js  */
-        if (f->duration >= dacf->fraglen * 2) {
+        /* keep fragment lengths within fragment_scale_limit factor for dash.js.
+           fragment_scale_limit used to limit fragments and avoid infinity segments */
+        if (f->duration >= dacf->fraglen * dacf->fragment_scale_limit) {
             boundary = 1;
         }
 
@@ -1217,6 +1226,8 @@ ngx_rtmp_dash_video(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     /* Recognize key frame*/
     if ((in->buf->pos[0] >> 4) == 1 || (is_ex_header == 1 && ((in->buf->pos[0] & 0x70) >> 4) == 1)) {
         ftype = 1;
+    } else {
+        ftype = 0;
     }
 
     /* skip AVC/HEVC config */
@@ -1503,6 +1514,7 @@ ngx_rtmp_dash_create_app_conf(ngx_conf_t *cf)
     conf->playlen = NGX_CONF_UNSET_MSEC;
     conf->cleanup = NGX_CONF_UNSET_MSEC;
     conf->nested = NGX_CONF_UNSET;
+    conf->fragment_scale_limit = NGX_CONF_UNSET_UINT;
 
     return conf;
 }
@@ -1520,6 +1532,7 @@ ngx_rtmp_dash_merge_app_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_msec_value(conf->playlen, prev->playlen, 30000);
     ngx_conf_merge_msec_value(conf->cleanup, prev->cleanup, conf->playlen);
     ngx_conf_merge_value(conf->nested, prev->nested, 0);
+    ngx_conf_merge_uint_value(conf->fragment_scale_limit, prev->fragment_scale_limit, 2);
 
     if (conf->fraglen) {
         conf->winfrags = conf->playlen / conf->fraglen;
